@@ -56,7 +56,11 @@ You help Tyler with anything he needs. You have access to several tools:
 3. **control_lights** — Control smart home devices. Collect: device/room, action (on/off/dim/bright/warm/cool/toggle).
 4. **web_search** — Search the web for current information. Collect: search query.
 5. **open_modal** — Open a specific action modal (email, call, lights).
-6. **show_tool_result** — Display a structured result card in the chat.
+6. **set_timer** — Set a countdown timer (e.g. "set a 10 minute timer").
+7. **set_reminder** — Set a reminder at a specific time (e.g. "remind me at 3pm to call Mum").
+8. **get_weather** — Get current weather in Sydney, opens weather mini-app.
+9. **web_search_mini** — Search the web and show results in the search mini-app.
+10. **music_control** — Control YouTube Music (open, play, pause, next, prev, search for a song).
 
 When a user asks you to perform an action:
 - If you have enough info, call the tool immediately.
@@ -161,6 +165,80 @@ User location: Sydney, Australia`;
         },
       },
     },
+    {
+      type: 'function',
+      function: {
+        name: 'set_timer',
+        description: 'Set a countdown timer. Opens the timer mini-app and starts counting down.',
+        parameters: {
+          type: 'object',
+          properties: {
+            minutes: { type: 'number', description: 'Minutes for the timer' },
+            seconds: { type: 'number', description: 'Additional seconds for the timer' },
+            label:   { type: 'string', description: 'Label describing what the timer is for' },
+          },
+          required: ['minutes'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'set_reminder',
+        description: 'Set a reminder for a specific time. Opens the reminders mini-app.',
+        parameters: {
+          type: 'object',
+          properties: {
+            message:  { type: 'string', description: 'What to remind Tyler about' },
+            datetime: { type: 'string', description: 'ISO datetime string for when to fire the reminder' },
+            when:     { type: 'string', description: 'Natural language time like "in 30 minutes", "at 3pm"' },
+          },
+          required: ['message'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'get_weather',
+        description: 'Get current weather and forecast for Sydney. Opens the weather mini-app.',
+        parameters: {
+          type: 'object',
+          properties: {
+            location: { type: 'string', description: 'Location (defaults to Sydney)' },
+          },
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'web_search_mini',
+        description: 'Search the web and show results in the search mini-app window.',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Search query' },
+          },
+          required: ['query'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'music_control',
+        description: 'Control YouTube Music — open it, play, pause, skip, or search for a song/artist/playlist.',
+        parameters: {
+          type: 'object',
+          properties: {
+            action: { type: 'string', enum: ['open', 'play', 'pause', 'next', 'prev', 'search'], description: 'Action to perform' },
+            query:  { type: 'string', description: 'Song/artist/playlist to search for (use with action=search)' },
+          },
+          required: ['action'],
+        },
+      },
+    },
   ];
 
   /* ══════════════════════════════════════════════
@@ -259,6 +337,7 @@ User location: Sydney, Australia`;
     setupInputHandlers();
     updateClock();
     setInterval(updateClock, 1000);
+    initMiniApps();
 
     // Decide which auth screen to show
     if (hasStoredKey()) {
@@ -879,6 +958,21 @@ User location: Sydney, Australia`;
       case 'open_modal':
         result = handleOpenModal(args);
         break;
+      case 'set_timer':
+        result = await handleSetTimer(args);
+        break;
+      case 'set_reminder':
+        result = await handleSetReminder(args);
+        break;
+      case 'get_weather':
+        result = await handleGetWeather(args);
+        break;
+      case 'web_search_mini':
+        result = await handleWebSearchMini(args);
+        break;
+      case 'music_control':
+        result = await handleMusicControl(args);
+        break;
       default:
         result = `Unknown tool: ${name}`;
     }
@@ -993,24 +1087,8 @@ User location: Sydney, Australia`;
   /* ── QUICK ACTIONS ── */
   function quickAction(type) {
     if (!state.apiKey) { log('Activate Charlotte first', 'warn'); return; }
-
-    const prompts = {
-      email:    'I want to send an email.',
-      call:     'I want to make a phone call.',
-      lights:   'Control my lights.',
-      search:   'Search the web for something.',
-      weather:  'What\'s the weather like in Sydney right now?',
-      reminder: 'Set a reminder for me.',
-      music:    'Play some music.',
-      timer:    'Set a timer.',
-    };
-
-    const text = prompts[type] || `I want to use ${type}.`;
-    appendMessage('user', text);
-    state.messages.push({ role: 'user', content: text });
-    state.msgCount++;
-    document.getElementById('headerMsgCount').textContent = state.msgCount;
-    processWithAI();
+    // Mini-app types open their window directly
+    quickActionMiniApp(type);
   }
 
   /* ── MODAL EXECUTE ── */
@@ -1419,9 +1497,750 @@ User location: Sydney, Australia`;
     log(`Voice speed: ${e.target.value}x`, 'info');
   });
 
-  /* ── BOOT ── */
+
+  /* ═══════════════════════════════════════════════════════
+     MINI-APPS — Draggable HUD Windows
+     ═══════════════════════════════════════════════════════ */
+
+  // ── Draggable system ──
+  function makeDraggable(appEl, barEl) {
+    let startX, startY, startLeft, startTop, isDragging = false;
+
+    barEl.addEventListener('mousedown', e => {
+      if (e.target.closest('.mini-app-btn')) return;
+      isDragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      const rect = appEl.getBoundingClientRect();
+      startLeft = rect.left;
+      startTop  = rect.top;
+      appEl.style.right = 'auto';
+      appEl.classList.add('dragging');
+      e.preventDefault();
+    });
+
+    // Touch support
+    barEl.addEventListener('touchstart', e => {
+      if (e.target.closest('.mini-app-btn')) return;
+      isDragging = true;
+      const t = e.touches[0];
+      startX = t.clientX;
+      startY = t.clientY;
+      const rect = appEl.getBoundingClientRect();
+      startLeft = rect.left;
+      startTop  = rect.top;
+      appEl.style.right = 'auto';
+      appEl.classList.add('dragging');
+    }, { passive: true });
+
+    document.addEventListener('mousemove', e => {
+      if (!isDragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      const maxL = window.innerWidth  - appEl.offsetWidth;
+      const maxT = window.innerHeight - appEl.offsetHeight;
+      appEl.style.left = Math.max(0, Math.min(startLeft + dx, maxL)) + 'px';
+      appEl.style.top  = Math.max(0, Math.min(startTop  + dy, maxT)) + 'px';
+    });
+
+    document.addEventListener('touchmove', e => {
+      if (!isDragging) return;
+      const t = e.touches[0];
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      const maxL = window.innerWidth  - appEl.offsetWidth;
+      const maxT = window.innerHeight - appEl.offsetHeight;
+      appEl.style.left = Math.max(0, Math.min(startLeft + dx, maxL)) + 'px';
+      appEl.style.top  = Math.max(0, Math.min(startTop  + dy, maxT)) + 'px';
+    }, { passive: true });
+
+    const stopDrag = () => { isDragging = false; appEl.classList.remove('dragging'); };
+    document.addEventListener('mouseup',  stopDrag);
+    document.addEventListener('touchend', stopDrag);
+  }
+
+  // ── Init all draggable mini-apps ──
+  function initMiniApps() {
+    [
+      ['miniTimer',    'miniTimerBar'],
+      ['miniReminder', 'miniReminderBar'],
+      ['miniWeather',  'miniWeatherBar'],
+      ['miniSearch',   'miniSearchBar'],
+      ['miniMusic',    'miniMusicBar'],
+    ].forEach(([appId, barId]) => {
+      const app = document.getElementById(appId);
+      const bar = document.getElementById(barId);
+      if (app && bar) makeDraggable(app, bar);
+    });
+
+    // Start reminder polling loop
+    setInterval(checkReminders, 30000);
+  }
+
+  function openMiniApp(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    // Bring to front
+    document.querySelectorAll('.mini-app').forEach(a => a.style.zIndex = 900);
+    el.style.zIndex = 910;
+    el.classList.add('open');
+    el.style.display = '';
+
+    // Auto-load weather when opened
+    if (id === 'miniWeather') loadWeather();
+  }
+
+  function closeMiniApp(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('open');
+  }
+
+  function minimizeMiniApp(id) {
+    closeMiniApp(id);
+  }
+
+  function bringToFront(id) {
+    document.querySelectorAll('.mini-app').forEach(a => a.style.zIndex = 900);
+    const el = document.getElementById(id);
+    if (el) el.style.zIndex = 910;
+  }
+
+  // Click to focus
+  document.addEventListener('mousedown', e => {
+    const app = e.target.closest('.mini-app');
+    if (app) {
+      document.querySelectorAll('.mini-app').forEach(a => a.style.zIndex = 900);
+      app.style.zIndex = 910;
+    }
+  });
+
+  // Toast notification
+  function miniToast(msg, duration = 3500) {
+    const el = document.getElementById('miniappToast');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(el._toastTimer);
+    el._toastTimer = setTimeout(() => el.classList.remove('show'), duration);
+  }
+
+
+  /* ─────────────────── TIMER ─────────────────── */
+  const timerState = {
+    total:     0,   // seconds set
+    remaining: 0,   // seconds left
+    running:   false,
+    interval:  null,
+    label:     '',
+  };
+
+  const TIMER_CIRCUMFERENCE = 2 * Math.PI * 78; // 490.09
+
+  function timerPreset(minutes) {
+    timerStop();
+    timerState.total     = minutes * 60;
+    timerState.remaining = minutes * 60;
+    timerState.label     = `${minutes} minute timer`;
+    timerUpdateDisplay();
+    document.getElementById('timerLabel').textContent = timerState.label;
+  }
+
+  function timerSetCustom() {
+    const m = parseInt(document.getElementById('timerMinInput').value) || 0;
+    const s = parseInt(document.getElementById('timerSecInput').value) || 0;
+    const total = m * 60 + s;
+    if (total <= 0) { miniToast('Enter a time above 0'); return; }
+    timerStop();
+    timerState.total     = total;
+    timerState.remaining = total;
+    timerState.label     = `${m > 0 ? m + ' min ' : ''}${s > 0 ? s + ' sec' : ''}timer`.trim();
+    timerUpdateDisplay();
+    document.getElementById('timerLabel').textContent = timerState.label;
+  }
+
+  function timerToggle() {
+    if (timerState.remaining <= 0 && !timerState.running) {
+      miniToast('Set a time first');
+      return;
+    }
+    if (timerState.running) {
+      timerStop();
+      document.getElementById('timerStartBtn').textContent = 'Resume';
+    } else {
+      timerStart();
+    }
+  }
+
+  function timerStart() {
+    if (timerState.remaining <= 0) return;
+    timerState.running = true;
+    document.getElementById('timerStartBtn').textContent = 'Pause';
+    timerState.interval = setInterval(() => {
+      timerState.remaining--;
+      timerUpdateDisplay();
+      if (timerState.remaining <= 0) {
+        timerStop();
+        timerFire();
+      }
+    }, 1000);
+  }
+
+  function timerStop() {
+    clearInterval(timerState.interval);
+    timerState.running = false;
+    document.getElementById('timerStartBtn').textContent = 'Start';
+  }
+
+  function timerReset() {
+    timerStop();
+    timerState.remaining = timerState.total;
+    timerUpdateDisplay();
+    document.getElementById('timerLabel').textContent = timerState.label || 'Set a timer';
+    const ring = document.getElementById('timerRingProgress');
+    if (ring) ring.classList.remove('urgent');
+  }
+
+  function timerUpdateDisplay() {
+    const r = timerState.remaining;
+    const m = String(Math.floor(r / 60)).padStart(2, '0');
+    const s = String(r % 60).padStart(2, '0');
+    document.getElementById('timerDisplay').textContent = `${m}:${s}`;
+
+    // Ring progress
+    const ring = document.getElementById('timerRingProgress');
+    if (ring && timerState.total > 0) {
+      const fraction = r / timerState.total;
+      ring.style.strokeDashoffset = TIMER_CIRCUMFERENCE * (1 - fraction);
+      if (r <= 10 && r > 0) {
+        ring.classList.add('urgent');
+      } else {
+        ring.classList.remove('urgent');
+      }
+    }
+  }
+
+  function timerFire() {
+    // Visual flash
+    const ring = document.getElementById('timerRingProgress');
+    if (ring) ring.classList.add('urgent');
+
+    // Alarm beep using Web Audio API
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const beepPattern = [0, 0.3, 0.6, 0.9];
+      beepPattern.forEach(offset => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = 880;
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.4, ctx.currentTime + offset);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + offset + 0.25);
+        osc.start(ctx.currentTime + offset);
+        osc.stop(ctx.currentTime + offset + 0.25);
+      });
+    } catch(e) {}
+
+    document.getElementById('timerLabel').textContent = 'Timer complete!';
+    miniToast('⏱ Timer finished!', 5000);
+    log('Timer complete', 'success');
+
+    // Notify Charlotte
+    const msg = 'Tyler, your timer is done.';
+    appendMessage('charlotte', msg);
+    if (state.autoSpeak) speak(msg);
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      new Notification('Timer done!', { body: 'Your timer has finished.', icon: '' });
+    }
+  }
+
+
+  /* ─────────────────── REMINDERS ─────────────────── */
+  const reminders = [];
+
+  function requestNotifPerms() {
+    if (typeof Notification === 'undefined') {
+      miniToast('Notifications not supported in this browser');
+      return;
+    }
+    Notification.requestPermission().then(p => {
+      miniToast(p === 'granted' ? 'Notifications enabled!' : 'Notification permission denied');
+      log(`Notification permission: ${p}`, p === 'granted' ? 'success' : 'warn');
+    });
+  }
+
+  function addReminder(textOverride, timeOverride) {
+    const text = textOverride || document.getElementById('reminderText').value.trim();
+    if (!text) { miniToast('Enter reminder text'); return; }
+
+    let targetTime;
+
+    if (timeOverride) {
+      targetTime = timeOverride;
+    } else {
+      const timeVal = document.getElementById('reminderTime').value;
+      const dateVal = document.getElementById('reminderDate').value;
+      if (!timeVal) { miniToast('Set a time for the reminder'); return; }
+      const dateStr = dateVal || new Date().toISOString().split('T')[0];
+      targetTime = new Date(`${dateStr}T${timeVal}:00`);
+      if (isNaN(targetTime.getTime()) || targetTime <= new Date()) {
+        miniToast('Please set a future time');
+        return;
+      }
+    }
+
+    const reminder = {
+      id: Date.now(),
+      text,
+      time: targetTime,
+      fired: false,
+    };
+    reminders.push(reminder);
+    renderReminderList();
+
+    // Clear form
+    document.getElementById('reminderText').value = '';
+    document.getElementById('reminderTime').value = '';
+    document.getElementById('reminderDate').value = '';
+
+    const timeStr = targetTime.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
+    miniToast(`Reminder set for ${timeStr}`);
+    log(`Reminder: "${text}" at ${timeStr}`, 'success');
+  }
+
+  function dismissReminder(id) {
+    const idx = reminders.findIndex(r => r.id === id);
+    if (idx !== -1) reminders.splice(idx, 1);
+    renderReminderList();
+  }
+
+  function renderReminderList() {
+    const list = document.getElementById('reminderList');
+    if (!list) return;
+    if (!reminders.length) {
+      list.innerHTML = '<div style="font-size:var(--text-xs);color:var(--color-text-faint);text-align:center;padding:var(--space-3)">No reminders set</div>';
+      return;
+    }
+    list.innerHTML = reminders.map(r => {
+      const timeStr = r.time.toLocaleString('en-AU', { weekday:'short', hour:'2-digit', minute:'2-digit' });
+      return `
+        <div class="reminder-item ${r.fired ? 'fired' : ''}" id="rem-${r.id}">
+          <div style="flex:1">
+            <div class="reminder-item-text">${escHtml(r.text)}</div>
+            <div class="reminder-item-time">${timeStr}</div>
+          </div>
+          <button class="reminder-item-dismiss" onclick="Charlotte.dismissReminder(${r.id})" title="Dismiss">&times;</button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function checkReminders() {
+    const now = new Date();
+    reminders.forEach(r => {
+      if (!r.fired && r.time <= now) {
+        r.fired = true;
+        fireReminder(r);
+      }
+    });
+    renderReminderList();
+  }
+
+  function fireReminder(r) {
+    // Sound
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.4, 0.8].forEach(off => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = 660;
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.35, ctx.currentTime + off);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + off + 0.3);
+        osc.start(ctx.currentTime + off);
+        osc.stop(ctx.currentTime + off + 0.3);
+      });
+    } catch(e) {}
+
+    miniToast(`⏰ Reminder: ${r.text}`, 6000);
+    log(`Reminder fired: ${r.text}`, 'info');
+
+    // Browser notification
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      new Notification('Charlotte Reminder', { body: r.text });
+    }
+
+    // Charlotte speaks
+    const msg = `Tyler, reminder: ${r.text}`;
+    appendMessage('charlotte', msg);
+    if (state.autoSpeak) speak(msg);
+
+    // Open mini-app if closed
+    openMiniApp('miniReminder');
+  }
+
+  // Parse natural language reminder from Charlotte tool call
+  function parseReminderFromText(text) {
+    // E.g. "in 10 minutes", "at 3pm", "tomorrow at 9am"
+    const inMatch = text.match(/in (\d+)\s*(minute|min|hour|hr|second|sec)s?/i);
+    if (inMatch) {
+      const num = parseInt(inMatch[1]);
+      const unit = inMatch[2].toLowerCase();
+      const ms = unit.startsWith('h') ? num * 3600000 : unit.startsWith('s') ? num * 1000 : num * 60000;
+      return new Date(Date.now() + ms);
+    }
+    const atMatch = text.match(/at (\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+    if (atMatch) {
+      const now = new Date();
+      let h = parseInt(atMatch[1]);
+      const m = parseInt(atMatch[2] || '0');
+      const ampm = (atMatch[3] || '').toLowerCase();
+      if (ampm === 'pm' && h < 12) h += 12;
+      if (ampm === 'am' && h === 12) h = 0;
+      const t = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
+      if (t <= now) t.setDate(t.getDate() + 1);
+      return t;
+    }
+    return null;
+  }
+
+
+  /* ─────────────────── WEATHER ─────────────────── */
+
+  // Weather code → emoji + description
+  const WMO_CODES = {
+    0:  ['☀️',  'Clear sky'],
+    1:  ['🌤️', 'Mainly clear'],
+    2:  ['⛅',  'Partly cloudy'],
+    3:  ['☁️',  'Overcast'],
+    45: ['🌫️', 'Foggy'],
+    48: ['🌫️', 'Icy fog'],
+    51: ['🌦️', 'Light drizzle'],
+    53: ['🌦️', 'Drizzle'],
+    55: ['🌧️', 'Heavy drizzle'],
+    61: ['🌧️', 'Light rain'],
+    63: ['🌧️', 'Rain'],
+    65: ['🌧️', 'Heavy rain'],
+    71: ['🌨️', 'Light snow'],
+    73: ['🌨️', 'Snow'],
+    75: ['❄️',  'Heavy snow'],
+    80: ['🌦️', 'Rain showers'],
+    81: ['🌧️', 'Showers'],
+    82: ['⛈️', 'Violent showers'],
+    95: ['⛈️', 'Thunderstorm'],
+    96: ['⛈️', 'Thunderstorm with hail'],
+    99: ['⛈️', 'Severe thunderstorm'],
+  };
+
+  function wmoInfo(code) {
+    return WMO_CODES[code] || ['🌡️', 'Unknown'];
+  }
+
+  async function loadWeather() {
+    const loading = document.getElementById('weatherLoading');
+    const content = document.getElementById('weatherContent');
+    if (loading) loading.style.display = 'flex';
+    if (content) content.style.display = 'none';
+
+    try {
+      // Sydney coords
+      const lat = -33.8688, lon = 151.2093;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,uv_index&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Australia%2FSydney&forecast_days=5`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Weather API error');
+      const data = await res.json();
+
+      const cur = data.current;
+      const [icon, desc] = wmoInfo(cur.weather_code);
+
+      document.getElementById('weatherIconBig').textContent = icon;
+      document.getElementById('weatherTempBig').textContent = `${Math.round(cur.temperature_2m)}°`;
+      document.getElementById('weatherDesc').textContent = desc;
+      document.getElementById('weatherFeels').textContent = `${Math.round(cur.apparent_temperature)}°`;
+      document.getElementById('weatherHumidity').textContent = `${cur.relative_humidity_2m}%`;
+      document.getElementById('weatherWind').textContent = `${Math.round(cur.wind_speed_10m)} km/h`;
+      document.getElementById('weatherUV').textContent = cur.uv_index?.toFixed(1) ?? '--';
+
+      // Forecast
+      const forecastEl = document.getElementById('weatherForecast');
+      const days = data.daily;
+      const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      forecastEl.innerHTML = days.time.map((dateStr, i) => {
+        const d = new Date(dateStr);
+        const name = i === 0 ? 'Today' : dayNames[d.getDay()];
+        const [dayIcon] = wmoInfo(days.weather_code[i]);
+        const hi = Math.round(days.temperature_2m_max[i]);
+        const lo = Math.round(days.temperature_2m_min[i]);
+        return `<div class="weather-forecast-day">
+          <div class="day-name">${name}</div>
+          <div class="day-icon">${dayIcon}</div>
+          <div class="day-hi">${hi}°</div>
+          <div class="day-lo">${lo}°</div>
+        </div>`;
+      }).join('');
+
+      if (loading) loading.style.display = 'none';
+      if (content) content.style.display = '';
+      log(`Weather loaded — ${Math.round(cur.temperature_2m)}°C ${desc}`, 'success');
+
+      // Return summary for Charlotte
+      return `${desc}, ${Math.round(cur.temperature_2m)}°C (feels ${Math.round(cur.apparent_temperature)}°C), humidity ${cur.relative_humidity_2m}%, wind ${Math.round(cur.wind_speed_10m)} km/h`;
+    } catch (err) {
+      if (loading) loading.textContent = '⚠ Could not load weather';
+      log(`Weather error: ${err.message}`, 'error');
+      return 'Could not fetch weather data';
+    }
+  }
+
+
+  /* ─────────────────── SEARCH ─────────────────── */
+
+  async function doSearch(queryOverride) {
+    const query = queryOverride || document.getElementById('searchInput').value.trim();
+    if (!query) return;
+
+    const resultsEl = document.getElementById('searchResults');
+    resultsEl.innerHTML = '<div class="search-empty">Searching...</div>';
+
+    // Open the mini-app if closed
+    openMiniApp('miniSearch');
+    if (!queryOverride) document.getElementById('searchInput').value = query;
+
+    log(`Web search: ${query}`, 'info');
+
+    try {
+      // DuckDuckGo Instant Answers
+      const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+      const res = await fetch(ddgUrl);
+      const data = await res.json();
+
+      let html = '';
+
+      // AI instant answer
+      if (data.AbstractText) {
+        html += `<div class="search-ai-answer">
+          <div class="search-ai-label">✦ Quick Answer</div>
+          <div class="search-ai-text">${escHtml(data.AbstractText)}</div>
+        </div>`;
+      } else if (data.Answer) {
+        html += `<div class="search-ai-answer">
+          <div class="search-ai-label">✦ Answer</div>
+          <div class="search-ai-text">${escHtml(data.Answer)}</div>
+        </div>`;
+      }
+
+      // Related topics as results
+      if (data.RelatedTopics?.length) {
+        const topics = data.RelatedTopics.filter(t => t.Text).slice(0, 6);
+        topics.forEach(t => {
+          const url = t.FirstURL || `https://duckduckgo.com/?q=${encodeURIComponent(query)}`;
+          html += `<a class="search-result-item" href="${url}" target="_blank" rel="noopener">
+            <div class="search-result-title">${escHtml(t.Text.split(' - ')[0].substring(0, 80))}</div>
+            <div class="search-result-snippet">${escHtml(t.Text.substring(0, 160))}</div>
+            <div class="search-result-url">${escHtml(url)}</div>
+          </a>`;
+        });
+      }
+
+      // Fallback: open web link
+      if (!html) {
+        html = `<div class="search-empty">No instant answer found.</div>
+          <a class="search-result-item" href="https://duckduckgo.com/?q=${encodeURIComponent(query)}" target="_blank" rel="noopener">
+            <div class="search-result-title">Search DuckDuckGo</div>
+            <div class="search-result-snippet">Open full search results for: ${escHtml(query)}</div>
+          </a>
+          <a class="search-result-item" href="https://www.google.com/search?q=${encodeURIComponent(query)}" target="_blank" rel="noopener">
+            <div class="search-result-title">Search Google</div>
+            <div class="search-result-snippet">Open Google results for: ${escHtml(query)}</div>
+          </a>`;
+      }
+
+      resultsEl.innerHTML = html;
+
+      // Feed summary back to Charlotte
+      const summary = data.AbstractText || data.Answer || (data.RelatedTopics?.[0]?.Text) || 'No direct answer found';
+      return summary;
+
+    } catch (err) {
+      resultsEl.innerHTML = `<div class="search-empty">Search error. Check your connection.</div>`;
+      log(`Search error: ${err.message}`, 'error');
+      return `Search failed: ${err.message}`;
+    }
+  }
+
+
+  /* ─────────────────── MUSIC ─────────────────── */
+
+  const musicState = {
+    window: null,
+  };
+
+  function musicOpenYT() {
+    musicState.window = window.open('https://music.youtube.com', '_blank', 'noopener');
+    document.getElementById('musicStatus').textContent = 'YT Music opened in new tab';
+    miniToast('YouTube Music opened in new tab');
+    log('YT Music opened', 'info');
+  }
+
+  function musicCmd(cmd) {
+    if (!musicState.window || musicState.window.closed) {
+      miniToast('Open YT Music first');
+      openMiniApp('miniMusic');
+      return;
+    }
+    // Keyboard shortcut injection
+    const keyMap = {
+      play:  { key: 'k', code: 'KeyK' },
+      pause: { key: 'k', code: 'KeyK' },
+      next:  { key: 'l', code: 'ArrowRight', shiftKey: true },  // YT Music: shift+N
+      prev:  { key: 'j', code: 'ArrowLeft',  shiftKey: true },
+    };
+    // YT Music shortcuts: k=play/pause, shift+N=next, shift+P=prev
+    const shortcuts = {
+      play:  [{ key: 'k', keyCode: 75 }],
+      pause: [{ key: 'k', keyCode: 75 }],
+      next:  [{ key: 'N', keyCode: 78, shiftKey: true }],
+      prev:  [{ key: 'P', keyCode: 80, shiftKey: true }],
+    };
+    try {
+      const actions = shortcuts[cmd];
+      if (actions) {
+        actions.forEach(opts => {
+          musicState.window.document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, ...opts }));
+        });
+      }
+    } catch(e) {
+      // Cross-origin — can't inject, instruct user
+      miniToast(`Use keyboard in YT Music tab: ${cmd === 'play' || cmd === 'pause' ? 'K' : cmd === 'next' ? 'Shift+N' : 'Shift+P'}`);
+    }
+    document.getElementById('musicStatus').textContent = `Command sent: ${cmd}`;
+    log(`Music: ${cmd}`, 'info');
+  }
+
+  function musicSearch(queryOverride) {
+    const query = queryOverride || document.getElementById('musicSearchInput').value.trim();
+    if (!query) return;
+
+    // Open YT Music with search pre-filled
+    const url = `https://music.youtube.com/search?q=${encodeURIComponent(query)}`;
+    if (musicState.window && !musicState.window.closed) {
+      musicState.window.location.href = url;
+    } else {
+      musicState.window = window.open(url, '_blank', 'noopener');
+    }
+    document.getElementById('musicStatus').textContent = `Searching: "${query}"`;
+    miniToast(`Opening YT Music search: ${query}`);
+    log(`Music search: ${query}`, 'info');
+  }
+
+
+  /* ─────────────────── TOOL INTEGRATION ─────────────────── */
+
+  // Updated quickAction — now opens mini-apps directly for relevant tools
+  function quickActionMiniApp(type) {
+    if (!state.apiKey) { log('Activate Charlotte first', 'warn'); return; }
+
+    const miniAppMap = {
+      weather:  'miniWeather',
+      reminder: 'miniReminder',
+      timer:    'miniTimer',
+      search:   'miniSearch',
+      music:    'miniMusic',
+    };
+
+    if (miniAppMap[type]) {
+      openMiniApp(miniAppMap[type]);
+      log(`Opened ${type} mini-app`, 'info');
+      return;
+    }
+
+    // Fall through to chat for email / call / lights
+    const prompts = {
+      email:  'I want to send an email.',
+      call:   'I want to make a phone call.',
+      lights: 'Control my lights.',
+    };
+    const text = prompts[type] || `I want to use ${type}.`;
+    appendMessage('user', text);
+    state.messages.push({ role: 'user', content: text });
+    state.msgCount++;
+    document.getElementById('headerMsgCount').textContent = state.msgCount;
+    processWithAI();
+  }
+
+  /* ─────────────────── NEW TOOL HANDLERS ─────────────────── */
+
+  async function handleSetTimer(args) {
+    const seconds = (args.minutes || 0) * 60 + (args.seconds || 0);
+    if (seconds <= 0) return 'No time specified for timer';
+    timerStop();
+    timerState.total     = seconds;
+    timerState.remaining = seconds;
+    timerState.label     = args.label || `${args.minutes || 0}m ${args.seconds || 0}s timer`;
+    timerUpdateDisplay();
+    const labelEl = document.getElementById('timerLabel');
+    if (labelEl) labelEl.textContent = timerState.label;
+    openMiniApp('miniTimer');
+    timerStart();
+    const m = Math.floor(seconds / 60), s = seconds % 60;
+    const timeStr = m > 0 ? `${m} minute${m > 1 ? 's' : ''}${s > 0 ? ` ${s} seconds` : ''}` : `${s} seconds`;
+    return `Timer set for ${timeStr} and started.`;
+  }
+
+  async function handleSetReminder(args) {
+    let targetTime = null;
+    if (args.datetime) {
+      targetTime = new Date(args.datetime);
+    } else if (args.text) {
+      targetTime = parseReminderFromText(args.text + ' ' + (args.when || ''));
+    }
+    if (!targetTime || isNaN(targetTime.getTime())) {
+      // Default 10 minutes
+      targetTime = new Date(Date.now() + 10 * 60000);
+    }
+    if (targetTime <= new Date()) targetTime = new Date(Date.now() + 60000);
+
+    openMiniApp('miniReminder');
+    addReminder(args.message || args.text || 'Reminder', targetTime);
+    const timeStr = targetTime.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
+    return `Reminder set for ${timeStr}: "${args.message || args.text}"`;
+  }
+
+  async function handleGetWeather(args) {
+    openMiniApp('miniWeather');
+    const summary = await loadWeather();
+    return `Current weather in Sydney: ${summary}`;
+  }
+
+  async function handleWebSearchMini(args) {
+    openMiniApp('miniSearch');
+    const el = document.getElementById('searchInput');
+    if (el) el.value = args.query;
+    const result = await doSearch(args.query);
+    return `Search results for "${args.query}": ${result}`;
+  }
+
+  async function handleMusicControl(args) {
+    openMiniApp('miniMusic');
+    if (args.action === 'search' && args.query) {
+      musicSearch(args.query);
+      return `Opening YT Music and searching for "${args.query}".`;
+    }
+    if (args.action === 'open') {
+      musicOpenYT();
+      return 'Opening YouTube Music.';
+    }
+    musicCmd(args.action);
+    return `Music: ${args.action} command sent.`;
+  }
+
+
+    /* ── BOOT ── */
   init();
 
   /* ── PUBLIC API ── */
-  return { sendMessage, toggleVoice, quickAction, openSettings, saveSettings, clearChat, openModal, closeModal, executeEmail, executeCall, executeLights, resetAuth };
+  return { sendMessage, toggleVoice, quickAction, openSettings, saveSettings, clearChat, openModal, closeModal, executeEmail, executeCall, executeLights, resetAuth, openMiniApp, closeMiniApp, minimizeMiniApp, timerPreset, timerSetCustom, timerToggle, timerReset, addReminder, dismissReminder, requestNotifPerms, loadWeather, doSearch, musicOpenYT, musicCmd, musicSearch };
 })();

@@ -423,6 +423,180 @@
     </div>
   </div>
 
+
+  <!-- ═══════════════ MINI-APPS ═══════════════ -->
+
+  <!-- TIMER Mini-App -->
+  <div class="mini-app" id="miniTimer" style="top:120px;left:calc(50% - 200px)">
+    <div class="mini-app-bar" id="miniTimerBar">
+      <span class="mini-app-icon">&#x23F1;&#xFE0F;</span>
+      <span class="mini-app-title">Timer</span>
+      <div class="mini-app-controls">
+        <button class="mini-app-btn minimize" onclick="Charlotte.minimizeMiniApp('miniTimer')" title="Minimize">&mdash;</button>
+        <button class="mini-app-btn close" onclick="Charlotte.closeMiniApp('miniTimer')" title="Close">&times;</button>
+      </div>
+    </div>
+    <div class="mini-app-body">
+      <div class="timer-ring-wrap">
+        <div class="timer-ring-container">
+          <svg class="timer-ring-svg" width="170" height="170" viewBox="0 0 170 170">
+            <circle class="timer-ring-bg" cx="85" cy="85" r="78"/>
+            <circle class="timer-ring-progress" id="timerRingProgress" cx="85" cy="85" r="78"/>
+          </svg>
+          <div class="timer-display" id="timerDisplay">00:00</div>
+        </div>
+        <div class="timer-label-text" id="timerLabel">Set a timer</div>
+        <div class="timer-preset-row">
+          <button class="timer-preset" onclick="Charlotte.timerPreset(1)">1 min</button>
+          <button class="timer-preset" onclick="Charlotte.timerPreset(5)">5 min</button>
+          <button class="timer-preset" onclick="Charlotte.timerPreset(10)">10 min</button>
+          <button class="timer-preset" onclick="Charlotte.timerPreset(25)">25 min</button>
+          <button class="timer-preset" onclick="Charlotte.timerPreset(30)">30 min</button>
+        </div>
+        <div class="timer-input-row">
+          <input type="number" id="timerMinInput" placeholder="min" min="0" max="999" style="max-width:80px" />
+          <input type="number" id="timerSecInput" placeholder="sec" min="0" max="59" style="max-width:80px" />
+          <button class="hud-btn primary" onclick="Charlotte.timerSetCustom()">Set</button>
+        </div>
+        <div class="timer-controls">
+          <button class="hud-btn primary" id="timerStartBtn" onclick="Charlotte.timerToggle()">Start</button>
+          <button class="hud-btn" onclick="Charlotte.timerReset()">Reset</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REMINDER Mini-App -->
+  <div class="mini-app" id="miniReminder" style="top:120px;left:calc(50% + 60px)">
+    <div class="mini-app-bar" id="miniReminderBar">
+      <span class="mini-app-icon">&#x23F0;</span>
+      <span class="mini-app-title">Reminders</span>
+      <div class="mini-app-controls">
+        <button class="mini-app-btn minimize" onclick="Charlotte.minimizeMiniApp('miniReminder')" title="Minimize">&mdash;</button>
+        <button class="mini-app-btn close" onclick="Charlotte.closeMiniApp('miniReminder')" title="Close">&times;</button>
+      </div>
+    </div>
+    <div class="mini-app-body">
+      <div class="reminder-form">
+        <div class="mini-section-label">New Reminder</div>
+        <input class="reminder-input" id="reminderText" type="text" placeholder="Remind me to..." />
+        <div style="display:flex;gap:var(--space-2)">
+          <input class="reminder-input" id="reminderTime" type="time" style="flex:1" />
+          <input class="reminder-input" id="reminderDate" type="date" style="flex:1" />
+        </div>
+        <div style="display:flex;gap:var(--space-2)">
+          <button class="hud-btn primary" style="flex:1" onclick="Charlotte.addReminder()">Add Reminder</button>
+          <button class="hud-btn" onclick="Charlotte.requestNotifPerms()">Enable Alerts</button>
+        </div>
+      </div>
+      <div class="mini-section-label" style="margin-top:var(--space-4)">Scheduled</div>
+      <div class="reminder-list" id="reminderList">
+        <div style="font-size:var(--text-xs);color:var(--color-text-faint);text-align:center;padding:var(--space-3)">No reminders set</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WEATHER Mini-App -->
+  <div class="mini-app" id="miniWeather" style="top:120px;right:20px">
+    <div class="mini-app-bar" id="miniWeatherBar">
+      <span class="mini-app-icon">&#x1F326;&#xFE0F;</span>
+      <span class="mini-app-title">Weather</span>
+      <div class="mini-app-controls">
+        <button class="mini-app-btn minimize" onclick="Charlotte.minimizeMiniApp('miniWeather')" title="Minimize">&mdash;</button>
+        <button class="mini-app-btn close" onclick="Charlotte.closeMiniApp('miniWeather')" title="Close">&times;</button>
+      </div>
+    </div>
+    <div class="mini-app-body" id="weatherBody">
+      <div class="weather-loading" id="weatherLoading">&#x23F3; Fetching weather...</div>
+      <div id="weatherContent" style="display:none">
+        <div class="weather-main">
+          <div class="weather-icon-big" id="weatherIconBig">&#x1F324;&#xFE0F;</div>
+          <div>
+            <div class="weather-temp-big" id="weatherTempBig">--&deg;</div>
+            <div class="weather-desc" id="weatherDesc">Loading...</div>
+            <div class="weather-location" id="weatherLocation">Sydney, NSW</div>
+          </div>
+        </div>
+        <div class="weather-grid">
+          <div class="weather-stat">
+            <div class="weather-stat-label">Feels Like</div>
+            <div class="weather-stat-value" id="weatherFeels">--&deg;</div>
+          </div>
+          <div class="weather-stat">
+            <div class="weather-stat-label">Humidity</div>
+            <div class="weather-stat-value" id="weatherHumidity">--%</div>
+          </div>
+          <div class="weather-stat">
+            <div class="weather-stat-label">Wind</div>
+            <div class="weather-stat-value" id="weatherWind">-- km/h</div>
+          </div>
+          <div class="weather-stat">
+            <div class="weather-stat-label">UV Index</div>
+            <div class="weather-stat-value" id="weatherUV">--</div>
+          </div>
+        </div>
+        <div class="mini-section-label" style="margin-top:var(--space-3)">5-Day Forecast</div>
+        <div class="weather-forecast" id="weatherForecast"></div>
+        <div class="weather-refresh" onclick="Charlotte.loadWeather()">&#x21BB; Refresh</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEARCH Mini-App -->
+  <div class="mini-app" id="miniSearch" style="top:140px;left:calc(50% - 210px)">
+    <div class="mini-app-bar" id="miniSearchBar">
+      <span class="mini-app-icon">&#x1F50D;</span>
+      <span class="mini-app-title">Search</span>
+      <div class="mini-app-controls">
+        <button class="mini-app-btn minimize" onclick="Charlotte.minimizeMiniApp('miniSearch')" title="Minimize">&mdash;</button>
+        <button class="mini-app-btn close" onclick="Charlotte.closeMiniApp('miniSearch')" title="Close">&times;</button>
+      </div>
+    </div>
+    <div class="mini-app-body">
+      <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="Search anything..." onkeydown="if(event.key==='Enter')Charlotte.doSearch()" />
+        <button class="hud-btn primary" onclick="Charlotte.doSearch()">Search</button>
+      </div>
+      <div class="search-results" id="searchResults">
+        <div class="search-empty">Type a query above and hit Search</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MUSIC Mini-App -->
+  <div class="mini-app" id="miniMusic" style="top:120px;left:calc(50% - 180px)">
+    <div class="mini-app-bar" id="miniMusicBar">
+      <span class="mini-app-icon">&#x1F3B5;</span>
+      <span class="mini-app-title">YT Music</span>
+      <div class="mini-app-controls">
+        <button class="mini-app-btn minimize" onclick="Charlotte.minimizeMiniApp('miniMusic')" title="Minimize">&mdash;</button>
+        <button class="mini-app-btn close" onclick="Charlotte.closeMiniApp('miniMusic')" title="Close">&times;</button>
+      </div>
+    </div>
+    <div class="mini-app-body">
+      <div class="music-mini">
+        <div class="music-note">YouTube Music opens in a new window so Charlotte can control it via voice commands.</div>
+        <button class="music-open-btn" onclick="Charlotte.musicOpenYT()">&#x1F3B5; Open YT Music</button>
+        <div class="mini-section-label" style="margin-top:var(--space-3)">Charlotte Controls</div>
+        <div style="display:flex;flex-wrap:wrap;gap:var(--space-2)">
+          <button class="hud-btn" onclick="Charlotte.musicCmd('play')">&#x25B6; Play</button>
+          <button class="hud-btn" onclick="Charlotte.musicCmd('pause')">&#x23F8; Pause</button>
+          <button class="hud-btn" onclick="Charlotte.musicCmd('next')">&#x23ED; Next</button>
+          <button class="hud-btn" onclick="Charlotte.musicCmd('prev')">&#x23EE; Prev</button>
+        </div>
+        <div class="mini-section-label" style="margin-top:var(--space-2)">Search &amp; Play</div>
+        <div class="search-bar">
+          <input type="text" id="musicSearchInput" placeholder="Song, artist, playlist..." onkeydown="if(event.key==='Enter')Charlotte.musicSearch()" />
+          <button class="hud-btn primary" onclick="Charlotte.musicSearch()">Play</button>
+        </div>
+        <div class="music-note" style="margin-top:var(--space-2)" id="musicStatus">YT Music not opened yet</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notification -->
+  <div class="miniapp-toast" id="miniappToast"></div>
+
   <script src="./app.js"></script>
 <script data-pplx-inline-edit>
 (function () {
