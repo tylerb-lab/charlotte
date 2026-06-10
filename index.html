@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Charlotte — Personal AI</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="./base.css" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body class="hud-boot">
+
+  <!-- API Key Overlay -->
+  <div class="api-overlay" id="apiOverlay">
+    <div class="api-card">
+      <div class="api-card-icon">⚡</div>
+      <div class="api-card-title">CHARLOTTE INITIALISING</div>
+      <div class="api-card-desc">
+        Enter your OpenAI API key to bring Charlotte online.<br/>
+        Your key is stored in memory only and never sent anywhere except OpenAI.
+      </div>
+      <div class="api-input-row">
+        <input
+          class="api-input"
+          id="apiKeyInput"
+          type="password"
+          placeholder="sk-..."
+          autocomplete="off"
+        />
+        <button class="api-btn" id="apiKeySubmit">ACTIVATE</button>
+      </div>
+      <div class="api-note">
+        Need a key? Visit <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" style="color:var(--color-primary)">platform.openai.com</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-logo">
+      <!-- SVG Logo -->
+      <svg class="logo-mark" viewBox="0 0 36 36" fill="none" aria-label="Charlotte logo" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="18" cy="18" r="16" stroke="currentColor" stroke-width="1.5" stroke-opacity="0.4"/>
+        <circle cx="18" cy="18" r="10" stroke="#00d4ff" stroke-width="1.5"/>
+        <circle cx="18" cy="18" r="4" fill="#00d4ff" opacity="0.8"/>
+        <!-- Tick marks -->
+        <line x1="18" y1="2" x2="18" y2="6" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="18" y1="30" x2="18" y2="34" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="2" y1="18" x2="6" y2="18" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="30" y1="18" x2="34" y2="18" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round"/>
+        <!-- Diagonal accent -->
+        <line x1="8" y1="8" x2="11" y2="11" stroke="#00d4ff" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+        <line x1="25" y1="25" x2="28" y2="28" stroke="#00d4ff" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+      </svg>
+      <div>
+        <div class="logo-text">CHARLOTTE</div>
+        <div class="logo-sub">Personal AI System</div>
+      </div>
+    </div>
+
+    <div class="header-stats">
+      <div class="stat-item">
+        <span class="stat-label">MODEL</span>
+        <span class="stat-value" id="headerModel">GPT-4o</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">SESSION</span>
+        <span class="stat-value" id="headerSession">00:00</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">MESSAGES</span>
+        <span class="stat-value" id="headerMsgCount">0</span>
+      </div>
+    </div>
+
+    <div class="header-controls">
+      <div class="status-dot" id="statusDot"></div>
+    </div>
+  </header>
+
+  <!-- Main Layout -->
+  <div class="main-layout">
+
+    <!-- LEFT PANEL — Actions -->
+    <aside class="panel panel-left">
+      <div class="panel-section-title">Quick Actions</div>
+      <div class="action-grid">
+        <button class="action-tile" onclick="Charlotte.quickAction('email')" title="Send Email">
+          <span class="action-tile-icon">✉️</span>
+          <span class="action-tile-label">Email</span>
+        </button>
+        <button class="action-tile" onclick="Charlotte.quickAction('call')" title="Make a Call">
+          <span class="action-tile-icon">📞</span>
+          <span class="action-tile-label">Call</span>
+        </button>
+        <button class="action-tile" onclick="Charlotte.quickAction('lights')" title="Control Lights">
+          <span class="action-tile-icon">💡</span>
+          <span class="action-tile-label">Lights</span>
+        </button>
+        <button class="action-tile" onclick="Charlotte.quickAction('search')" title="Web Search">
+          <span class="action-tile-icon">🔍</span>
+          <span class="action-tile-label">Search</span>
+        </button>
+        <button class="action-tile" onclick="Charlotte.quickAction('weather')" title="Weather">
+          <span class="action-tile-icon">🌦️</span>
+          <span class="action-tile-label">Weather</span>
+        </button>
+        <button class="action-tile" onclick="Charlotte.quickAction('reminder')" title="Set Reminder">
+          <span class="action-tile-icon">⏰</span>
+          <span class="action-tile-label">Remind</span>
+        </button>
+        <button class="action-tile" onclick="Charlotte.quickAction('music')" title="Music">
+          <span class="action-tile-icon">🎵</span>
+          <span class="action-tile-label">Music</span>
+        </button>
+        <button class="action-tile" onclick="Charlotte.quickAction('timer')" title="Set Timer">
+          <span class="action-tile-icon">⏱️</span>
+          <span class="action-tile-label">Timer</span>
+        </button>
+      </div>
+
+      <div class="panel-section-title" style="margin-top: var(--space-4)">Integrations</div>
+      <div class="status-list">
+        <div class="status-item">
+          <span class="status-item-label">Voice</span>
+          <span class="status-badge online" id="voiceStatus">READY</span>
+        </div>
+        <div class="status-item">
+          <span class="status-item-label">Email (SMTP)</span>
+          <span class="status-badge standby" id="emailStatus">CONFIG</span>
+        </div>
+        <div class="status-item">
+          <span class="status-item-label">Smart Home</span>
+          <span class="status-badge standby" id="lightsStatus">CONFIG</span>
+        </div>
+        <div class="status-item">
+          <span class="status-item-label">Twilio</span>
+          <span class="status-badge standby" id="callStatus">CONFIG</span>
+        </div>
+      </div>
+
+      <div class="panel-section-title" style="margin-top: var(--space-4)">Settings</div>
+      <div class="status-list">
+        <div class="status-item" style="cursor:pointer" onclick="Charlotte.openSettings('email')">
+          <span class="status-item-label">Email Setup</span>
+          <span style="color:var(--color-primary-dim);font-size:var(--text-xs)">▶ Config</span>
+        </div>
+        <div class="status-item" style="cursor:pointer" onclick="Charlotte.openSettings('smarthome')">
+          <span class="status-item-label">Smart Home</span>
+          <span style="color:var(--color-primary-dim);font-size:var(--text-xs)">▶ Config</span>
+        </div>
+        <div class="status-item" style="cursor:pointer" onclick="Charlotte.openSettings('calls')">
+          <span class="status-item-label">Calls (Twilio)</span>
+          <span style="color:var(--color-primary-dim);font-size:var(--text-xs)">▶ Config</span>
+        </div>
+        <div class="status-item" style="cursor:pointer" onclick="Charlotte.clearChat()">
+          <span class="status-item-label">Clear Chat</span>
+          <span style="color:var(--color-error);font-size:var(--text-xs)">✕ Clear</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CENTER — Orb + Chat -->
+    <main class="center-stage">
+
+      <!-- Orb Section -->
+      <div class="orb-container">
+        <div class="orb-wrapper">
+          <div class="orb-ring orb-ring-3"></div>
+          <div class="orb-ring orb-ring-1"></div>
+          <div class="orb-ring orb-ring-2"></div>
+          <div class="orb-core" id="orbCore" onclick="Charlotte.toggleVoice()">
+            <span class="orb-symbol">C</span>
+          </div>
+          <span class="orb-status" id="orbStatus">TAP TO SPEAK</span>
+          <!-- Preparing label for TTS fetch phase -->
+          <span class="orb-status" id="orbPrepStatus" style="opacity:0;transition:opacity 0.3s ease;font-size:var(--text-xs);bottom:-48px"></span>
+        </div>
+
+        <!-- Waveform -->
+        <div class="waveform" id="waveform" style="position:absolute;bottom:-8px;left:50%;transform:translateX(-50%);">
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+        </div>
+      </div>
+
+      <!-- Chat Messages -->
+      <div class="chat-area">
+        <div class="chat-messages" id="chatMessages">
+          <!-- Messages injected by JS -->
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-area">
+          <div class="input-bar">
+            <button class="input-btn" id="voiceBtn" onclick="Charlotte.toggleVoice()" title="Voice input" aria-label="Toggle voice input">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            </button>
+            <textarea
+              class="input-field"
+              id="inputField"
+              placeholder="Ask Charlotte anything..."
+              rows="1"
+              aria-label="Message input"
+            ></textarea>
+            <button class="input-btn send-btn" id="sendBtn" onclick="Charlotte.sendMessage()" title="Send" aria-label="Send message">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            </button>
+          </div>
+          <div class="input-hint" id="inputHint">Press Enter to send · Shift+Enter for new line · Click orb or mic for voice</div>
+        </div>
+      </div>
+    </main>
+
+    <!-- RIGHT PANEL — Activity Log -->
+    <aside class="panel panel-right">
+      <div class="panel-section-title">System Log</div>
+      <div class="log-feed" id="logFeed">
+        <div class="log-entry">
+          <span class="log-time">--:--</span>
+          <span class="log-text log-info">System initialising...</span>
+        </div>
+      </div>
+
+      <div class="panel-section-title" style="margin-top: var(--space-6)">Voice Settings</div>
+      <div class="status-list">
+        <div class="status-item" style="flex-direction:column;align-items:flex-start;gap:var(--space-2)">
+          <span class="status-item-label">TTS Voice</span>
+          <select id="voiceSelect" style="
+            background: var(--color-bg);
+            border: 1px solid var(--color-border-bright);
+            border-radius: var(--radius-sm);
+            color: var(--color-text);
+            font-family: var(--font-body);
+            font-size: var(--text-xs);
+            padding: 4px 8px;
+            width: 100%;
+            outline: none;
+          ">
+            <!-- Populated by JS -->
+          </select>
+        </div>
+        <div class="status-item" style="flex-direction:column;align-items:flex-start;gap:var(--space-2)">
+          <span class="status-item-label">Speed</span>
+          <input type="range" id="voiceSpeed" min="0.5" max="2" step="0.1" value="1"
+            style="width:100%;accent-color:var(--color-primary);" />
+        </div>
+        <div class="status-item" style="flex-direction:column;align-items:flex-start;gap:var(--space-2)">
+          <span class="status-item-label">TTS Engine</span>
+          <select id="ttsEngine" style="
+            background: var(--color-bg);
+            border: 1px solid var(--color-border-bright);
+            border-radius: var(--radius-sm);
+            color: var(--color-text);
+            font-family: var(--font-body);
+            font-size: var(--text-xs);
+            padding: 4px 8px;
+            width: 100%;
+            outline: none;
+          ">
+            <option value="openai" selected>OpenAI TTS — Nova</option>
+            <option value="openai-shimmer">OpenAI TTS — Shimmer</option>
+            <option value="openai-alloy">OpenAI TTS — Alloy</option>
+            <option value="browser">Browser TTS (Free / Offline)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="panel-section-title" style="margin-top: var(--space-4)">Active Tasks</div>
+      <div class="status-list" id="taskList">
+        <div class="status-item">
+          <span class="status-item-label" style="color:var(--color-text-faint)">No active tasks</span>
+        </div>
+      </div>
+
+      <div class="panel-section-title" style="margin-top: var(--space-4)">Conversation</div>
+      <div class="status-list">
+        <div class="status-item">
+          <span class="status-item-label">Memory</span>
+          <span class="status-badge online" id="memoryBadge">ON</span>
+        </div>
+        <div class="status-item">
+          <span class="status-item-label">Tokens Used</span>
+          <span class="stat-value" id="tokenCount" style="font-size:var(--text-xs)">0</span>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Email Modal -->
+  <div class="modal-overlay" id="emailModal">
+    <div class="modal-card">
+      <div class="corner-decoration tl"></div>
+      <div class="corner-decoration tr"></div>
+      <div class="corner-decoration bl"></div>
+      <div class="corner-decoration br"></div>
+      <div class="modal-title">✉️ Send Email</div>
+      <div class="modal-field">
+        <label class="modal-label">To</label>
+        <input class="modal-input" id="emailTo" type="email" placeholder="recipient@example.com" />
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Subject</label>
+        <input class="modal-input" id="emailSubject" type="text" placeholder="Subject line..." />
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Message</label>
+        <textarea class="modal-input modal-textarea" id="emailBody" placeholder="Your message..."></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="Charlotte.closeModal('emailModal')">Cancel</button>
+        <button class="btn-primary" onclick="Charlotte.executeEmail()">Send Email</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Call Modal -->
+  <div class="modal-overlay" id="callModal">
+    <div class="modal-card">
+      <div class="corner-decoration tl"></div>
+      <div class="corner-decoration tr"></div>
+      <div class="corner-decoration bl"></div>
+      <div class="corner-decoration br"></div>
+      <div class="modal-title">📞 Make a Call</div>
+      <div class="modal-field">
+        <label class="modal-label">Phone Number</label>
+        <input class="modal-input" id="callNumber" type="tel" placeholder="+1 234 567 8900" />
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Message (for SMS / TTS call)</label>
+        <textarea class="modal-input modal-textarea" id="callMessage" placeholder="What to say..."></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="Charlotte.closeModal('callModal')">Cancel</button>
+        <button class="btn-primary" onclick="Charlotte.executeCall()">Initiate Call</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Smart Home Modal -->
+  <div class="modal-overlay" id="lightsModal">
+    <div class="modal-card">
+      <div class="corner-decoration tl"></div>
+      <div class="corner-decoration tr"></div>
+      <div class="corner-decoration bl"></div>
+      <div class="corner-decoration br"></div>
+      <div class="modal-title">💡 Smart Home Control</div>
+      <div class="modal-field">
+        <label class="modal-label">Device / Room</label>
+        <input class="modal-input" id="deviceName" type="text" placeholder="Living room lights, bedroom, all lights..." />
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Action</label>
+        <select class="modal-input" id="deviceAction">
+          <option value="on">Turn On</option>
+          <option value="off">Turn Off</option>
+          <option value="dim">Dim (50%)</option>
+          <option value="bright">Full Brightness</option>
+          <option value="warm">Warm White</option>
+          <option value="cool">Cool White</option>
+          <option value="toggle">Toggle</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="Charlotte.closeModal('lightsModal')">Cancel</button>
+        <button class="btn-primary" onclick="Charlotte.executeLights()">Execute</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal-card">
+      <div class="corner-decoration tl"></div>
+      <div class="corner-decoration tr"></div>
+      <div class="corner-decoration bl"></div>
+      <div class="corner-decoration br"></div>
+      <div class="modal-title" id="settingsTitle">⚙️ Settings</div>
+      <div id="settingsContent"></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="Charlotte.closeModal('settingsModal')">Cancel</button>
+        <button class="btn-primary" onclick="Charlotte.saveSettings()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+<script data-pplx-inline-edit>
+(function () {
+  if (window === window.top) return;
+
+  const allowedParentOrigins = ["https://www.perplexity.ai","https://perplexity.ai","https://testing.perplexity.ai","https://staging.perplexity.ai","https://*.preview.i.perplexity.ai","http://localhost:3000","http://127.0.0.1:3000","http://localhost:5173","http://127.0.0.1:5173"];
+  const MAX_FONT_BYTES = 500 * 1024;
+  const MAX_TOTAL_FONT_BYTES = 2 * 1024 * 1024;
+  let scrollForwarding = false;
+  let scrollRaf = 0;
+  let trustedTopOrigin = null;
+
+  // Allow entries like "https://*.preview.i.perplexity.ai" — the wildcard
+  // matches a single DNS label (no dots), so "https://*.foo" cannot stretch
+  // across multiple labels.
+  function matchesAllowedOrigin(origin) {
+    if (!origin) return false;
+    for (const entry of allowedParentOrigins) {
+      if (!entry.includes("*")) {
+        if (entry === origin) return true;
+        continue;
+      }
+      const pattern = new RegExp(
+        "^" +
+          entry.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^.]+") +
+          "$",
+      );
+      if (pattern.test(origin)) return true;
+    }
+    return false;
+  }
+
+  // Trust decision: when the sender is same-origin-visible (event.origin is a
+  // real origin like https://www.perplexity.ai) we trust event.origin directly.
+  // When event.origin is "null" (opaque broker srcdoc), we fall back to the
+  // broker's stamped `parentOrigin` to identify the top window. The fallback
+  // is claim-only — we rely on the browser's native `targetOrigin` enforcement
+  // on the response path (see postToTrustedTop) to ensure replies can't be
+  // delivered to anyone but the actual top window of that claimed origin.
+  function getTrustedParentOrigin(event) {
+    const forwardedParentOrigin =
+      typeof event.data.parentOrigin === "string" ? event.data.parentOrigin : null;
+    const parentOrigin = event.origin === "null" ? forwardedParentOrigin : event.origin;
+    return matchesAllowedOrigin(parentOrigin) ? parentOrigin : null;
+  }
+
+  // All responses go to window.top with targetOrigin = the allowlisted origin.
+  // An attacker that iframes us inside their own null-origin broker can claim
+  // any parentOrigin they like, but the browser will drop the reply whenever
+  // the real top's origin doesn't match — so the screenshot never leaves.
+  function postToTrustedTop(message) {
+    if (!trustedTopOrigin) return;
+    try {
+      window.top.postMessage(message, trustedTopOrigin);
+    } catch (_error) {}
+  }
+
+  function inlineAll(original, clone) {
+    if (original.nodeType !== 1 || clone.nodeType !== 1) return;
+
+    try {
+      const computedStyle = getComputedStyle(original);
+      // cssText on a computed style is the serialized declaration in modern
+      // Chromium/Safari — a single read beats enumerating ~400 longhand
+      // properties. Firefox returns "" here, so we fall back on empty.
+      const serialized = computedStyle.cssText;
+      if (serialized) {
+        clone.style.cssText = serialized;
+      } else {
+        const parts = new Array(computedStyle.length);
+        for (let index = 0; index < computedStyle.length; index += 1) {
+          const property = computedStyle[index];
+          parts[index] = `${property}:${computedStyle.getPropertyValue(property)};`;
+        }
+        clone.style.cssText = parts.join("");
+      }
+    } catch (_error) {}
+
+    const originalChildren = original.children;
+    const clonedChildren = clone.children;
+    for (
+      let index = 0;
+      index < originalChildren.length && index < clonedChildren.length;
+      index += 1
+    ) {
+      inlineAll(originalChildren[index], clonedChildren[index]);
+    }
+  }
+
+  function extractFontUrl(srcValue) {
+    const matches = [
+      ...srcValue.matchAll(
+        /url\(["']?([^"')]+)["']?\)(?:\s*format\(["']?([^"')]+)["']?\))?/gi,
+      ),
+    ];
+    if (matches.length === 0) return null;
+    const woff2 = matches.find((m) => m[2] && m[2].toLowerCase().includes("woff2"));
+    if (woff2) return woff2[1];
+    const woff = matches.find((m) => m[2] && m[2].toLowerCase().includes("woff"));
+    if (woff) return woff[1];
+    return matches[0][1];
+  }
+
+  // Cache resolved font URL -> data URI across captures. Fonts on a page
+  // essentially never change, and a batch run emits multiple captures back to
+  // back — without this we'd refetch + re-base64 every time.
+  const fontDataUriCache = new Map();
+  const SRC_DECLARATION_RE = /src\s*:\s*[^;}]+/i;
+
+  async function fetchAsDataUri(url) {
+    if (fontDataUriCache.has(url)) return fontDataUriCache.get(url);
+    let dataUri = null;
+    try {
+      const response = await fetch(url, { mode: "cors", credentials: "omit" });
+      if (response.ok) {
+        const blob = await response.blob();
+        if (blob.size <= MAX_FONT_BYTES) {
+          dataUri = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () =>
+              resolve(typeof reader.result === "string" ? reader.result : null);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+          });
+        }
+      }
+    } catch (_error) {
+      dataUri = null;
+    }
+    fontDataUriCache.set(url, dataUri);
+    return dataUri;
+  }
+
+  function collectFontFaceRuleTexts() {
+    const rules = [];
+    for (const sheet of document.styleSheets) {
+      let cssRules;
+      try {
+        cssRules = sheet.cssRules;
+      } catch (_error) {
+        continue;
+      }
+      if (!cssRules) continue;
+      for (const rule of cssRules) {
+        const cssText = rule.cssText || "";
+        if (cssText.startsWith("@font-face")) rules.push(cssText);
+      }
+    }
+    return rules;
+  }
+
+  async function buildInlinedFontCss() {
+    const ruleTexts = collectFontFaceRuleTexts();
+    if (ruleTexts.length === 0) return null;
+
+    const resolved = ruleTexts.map((cssText) => {
+      if (!SRC_DECLARATION_RE.test(cssText)) return null;
+      const srcMatch = cssText.match(/src\s*:\s*([^;}]+)[;}]/i);
+      if (!srcMatch) return null;
+      const url = extractFontUrl(srcMatch[1]);
+      if (!url) return null;
+      try {
+        return { cssText, url: new URL(url, document.baseURI).href };
+      } catch (_error) {
+        return null;
+      }
+    });
+
+    const dataUris = await Promise.all(
+      resolved.map((entry) => (entry ? fetchAsDataUri(entry.url) : Promise.resolve(null))),
+    );
+
+    const inlined = [];
+    let totalBytes = 0;
+    for (let index = 0; index < resolved.length; index += 1) {
+      const entry = resolved[index];
+      const dataUri = dataUris[index];
+      if (!entry || !dataUri) continue;
+      const approxBytes = dataUri.length * 0.75;
+      if (totalBytes + approxBytes > MAX_TOTAL_FONT_BYTES) break;
+      totalBytes += approxBytes;
+      inlined.push(entry.cssText.replace(SRC_DECLARATION_RE, `src: url("${dataUri}")`));
+    }
+    return inlined.length > 0 ? inlined.join("\n") : null;
+  }
+
+  function stripExternal(clone) {
+    const images = clone.querySelectorAll("img");
+    for (let index = 0; index < images.length; index += 1) {
+      const src = images[index].getAttribute("src");
+      if (src && !src.startsWith("data:")) images[index].removeAttribute("src");
+    }
+
+    const elements = clone.querySelectorAll("*");
+    for (let index = 0; index < elements.length; index += 1) {
+      const style = elements[index].style.cssText;
+      if (style && style.includes("url(")) {
+        elements[index].style.cssText = style.replace(
+          /url\(["']?(?!data:)[^)"']*["']?\)/gi,
+          "none",
+        );
+      }
+    }
+  }
+
+  function emitScroll() {
+    scrollRaf = 0;
+    if (!scrollForwarding) return;
+    postToTrustedTop({
+      type: "INLINE_EDIT_SCROLL",
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+    });
+  }
+
+  window.addEventListener(
+    "scroll",
+    function () {
+      if (!scrollForwarding || scrollRaf) return;
+      scrollRaf = requestAnimationFrame(emitScroll);
+    },
+    { passive: true, capture: true },
+  );
+
+  async function handleCaptureRequest(event) {
+    const requestId = event.data.requestId;
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    function postResult(dataUrl) {
+      postToTrustedTop({
+        type: "INLINE_EDIT_SCREENSHOT_RESULT",
+        requestId,
+        dataUrl,
+        scrollX,
+        scrollY,
+      });
+    }
+
+    try {
+      // Wait for any pending web fonts to resolve so both inline metrics and
+      // the @font-face inlining below see the same loaded faces.
+      if (document.fonts && document.fonts.ready) {
+        try {
+          await document.fonts.ready;
+        } catch (_error) {}
+      }
+
+      const clone = document.documentElement.cloneNode(true);
+      inlineAll(document.documentElement, clone);
+
+      const removedNodes = clone.querySelectorAll("script,link[rel=\"stylesheet\"],style");
+      for (let index = 0; index < removedNodes.length; index += 1) {
+        removedNodes[index].remove();
+      }
+
+      stripExternal(clone);
+
+      // Re-embed web fonts as data-URI @font-face rules so the SVG rasterizer
+      // can resolve them — external font URLs aren't fetched during
+      // foreignObject rendering, which would otherwise force a fallback face
+      // and change text metrics.
+      const inlinedFontCss = await buildInlinedFontCss();
+      if (inlinedFontCss) {
+        const styleEl = document.createElement("style");
+        styleEl.textContent = inlinedFontCss;
+        const head = clone.querySelector("head");
+        if (head) head.appendChild(styleEl);
+        else clone.insertBefore(styleEl, clone.firstChild);
+      }
+
+      const html = new XMLSerializer().serializeToString(clone);
+      const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
+        '<foreignObject width="100%" height="100%">' +
+        `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden">` +
+        `<div style="position:relative;left:-${scrollX}px;top:-${scrollY}px">` +
+        html +
+        "</div></div></foreignObject></svg>";
+      const svgUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+      const image = new Image();
+      image.onload = function () {
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(image, 0, 0);
+        postResult(canvas.toDataURL("image/png"));
+      };
+      image.onerror = function () {
+        postResult(null);
+      };
+      image.src = svgUrl;
+    } catch (_error) {
+      postResult(null);
+    }
+  }
+
+  window.addEventListener("message", function (event) {
+    if (!event.data) return;
+    // Only accept messages from the direct parent frame. Blocks sibling /
+    // unrelated-window postMessage senders that could otherwise reach us.
+    if (event.source !== window.parent) return;
+
+    const trustedParentOrigin = getTrustedParentOrigin(event);
+    if (!trustedParentOrigin) return;
+    trustedTopOrigin = trustedParentOrigin;
+
+    if (event.data.type === "INLINE_EDIT_SCROLL_START") {
+      scrollForwarding = true;
+      emitScroll();
+      return;
+    }
+
+    if (event.data.type === "INLINE_EDIT_SCROLL_STOP") {
+      scrollForwarding = false;
+      if (scrollRaf) cancelAnimationFrame(scrollRaf);
+      scrollRaf = 0;
+      return;
+    }
+
+    if (event.data.type !== "INLINE_EDIT_CAPTURE_REQUEST") return;
+
+    handleCaptureRequest(event);
+  });
+})();
+
+
+</script></body>
+</html>
