@@ -22,6 +22,9 @@ const Charlotte = (() => {
       emailPass: null,
       emailHost: null,
       emailTo: null,
+      emailjsPublic: null,
+      emailjsService: null,
+      emailjsTemplate: null,
       twilioSid: null,
       twilioToken: null,
       twilioFrom: null,
@@ -1011,23 +1014,71 @@ User location: Sydney, Australia`;
   }
 
   /* ── MODAL EXECUTE ── */
-  function executeEmail() {
+  async function executeEmail() {
     const to      = document.getElementById('emailTo').value.trim();
     const subject = document.getElementById('emailSubject').value.trim();
     const body    = document.getElementById('emailBody').value.trim();
-    if (!to || !subject) { flashError(document.getElementById('emailTo'), 'Fill in all fields'); return; }
+    if (!to || !subject) { flashError(document.getElementById('emailTo'), 'Fill in recipient and subject'); return; }
 
+    const { emailjsPublic, emailjsService, emailjsTemplate, emailUser } = state.config;
+
+    // ── EmailJS path (credentials configured) ──
+    if (emailjsPublic && emailjsService && emailjsTemplate) {
+      const sendBtn = document.querySelector('#emailModal .btn-primary');
+      sendBtn.textContent = 'SENDING...';
+      sendBtn.disabled = true;
+
+      try {
+        // Initialise EmailJS with public key
+        if (window.emailjs) emailjs.init({ publicKey: emailjsPublic });
+
+        const result = await emailjs.send(
+          emailjsService,
+          emailjsTemplate,
+          {
+            to_email:  to,
+            subject:   subject,
+            message:   body,
+            from_name: 'Charlotte (via ' + (emailUser || 'Charlotte AI') + ')',
+            reply_to:  emailUser || '',
+          }
+        );
+
+        closeModal('emailModal');
+        showToolResultCard('Email Sent', [
+          { label: 'To',      value: to },
+          { label: 'Subject', value: subject },
+          { label: 'Status',  value: '\u2713 Delivered via EmailJS' },
+        ]);
+        const msg = `Done. Email sent to ${to}.`;
+        appendMessage('charlotte', msg);
+        speak(msg);
+        log(`Email sent to ${to} via EmailJS`, 'success');
+
+      } catch (err) {
+        sendBtn.textContent = 'Send Email';
+        sendBtn.disabled = false;
+        const errMsg = err?.text || err?.message || JSON.stringify(err);
+        showToolResultCard('Email Failed', [
+          { label: 'Error', value: errMsg },
+          { label: 'Tip',   value: 'Check your EmailJS Service ID, Template ID, and Public Key in Settings' },
+        ]);
+        log(`EmailJS error: ${errMsg}`, 'error');
+      }
+      return;
+    }
+
+    // ── No credentials — show what would be sent + prompt to set up ──
     closeModal('emailModal');
-    showToolResultCard('Email Drafted', [
-      { label: 'To', value: to },
+    showToolResultCard('Email Ready (Not Sent)', [
+      { label: 'To',      value: to },
       { label: 'Subject', value: subject },
-      { label: 'Note', value: 'Connect email backend to send automatically' },
+      { label: 'Note',    value: 'Configure EmailJS in Email Setup to enable sending' },
     ]);
-
-    const feedbackMsg = `Email to ${to} with subject "${subject}" has been prepared. To enable automatic sending, configure your email settings in the left panel.`;
-    appendMessage('charlotte', feedbackMsg);
-    speak(feedbackMsg);
-    log(`Email prepared for ${to}`, 'success');
+    const msg = `I've drafted the email to ${to}, but EmailJS isn't configured yet. Click Email Setup in the left panel and follow the instructions to enable sending.`;
+    appendMessage('charlotte', msg);
+    speak(msg);
+    log('EmailJS not configured — email not sent', 'warn');
   }
 
   function executeCall() {
@@ -1074,13 +1125,15 @@ User location: Sydney, Australia`;
 
     const settingsMap = {
       email: {
-        title: '✉️ Gmail Setup',
+        title: '✉️ EmailJS Setup',
         fields: [
-          { id: 'cfg_emailUser', label: 'Your Gmail Address', type: 'email', placeholder: 'you@gmail.com', cfgKey: 'emailUser' },
-          { id: 'cfg_emailPass', label: 'Gmail App Password (16-char, no spaces)', type: 'password', placeholder: 'xxxx xxxx xxxx xxxx', cfgKey: 'emailPass' },
-          { id: 'cfg_defaultTo', label: 'Default Recipient (optional)', type: 'email', placeholder: 'default@example.com', cfgKey: 'emailTo' },
+          { id: 'cfg_emailUser',       label: 'Your Gmail Address (From)',       type: 'email',    placeholder: 'you@gmail.com',          cfgKey: 'emailUser' },
+          { id: 'cfg_emailjsPublic',   label: 'EmailJS Public Key',              type: 'text',     placeholder: 'your_public_key',        cfgKey: 'emailjsPublic' },
+          { id: 'cfg_emailjsService',  label: 'EmailJS Service ID',              type: 'text',     placeholder: 'service_xxxxxxx',        cfgKey: 'emailjsService' },
+          { id: 'cfg_emailjsTemplate', label: 'EmailJS Template ID',             type: 'text',     placeholder: 'template_xxxxxxx',       cfgKey: 'emailjsTemplate' },
+          { id: 'cfg_defaultTo',       label: 'Default Recipient (optional)',     type: 'email',    placeholder: 'default@example.com',    cfgKey: 'emailTo' },
         ],
-        note: 'To get an App Password: Google Account → Security → 2-Step Verification → App Passwords → Create one named \'Charlotte\'.',
+        note: 'Setup: 1) Create free account at emailjs.com  2) Add Gmail as an Email Service → copy the Service ID  3) Create an Email Template with variables {{to_email}}, {{subject}}, {{message}}, {{from_name}} → copy Template ID  4) Go to Account → copy your Public Key.',
       },
       smarthome: {
         title: '💡 Smart Home Setup',
