@@ -1586,8 +1586,8 @@ User location: Sydney, Australia`;
     el.classList.add('open');
     el.style.display = '';
 
-    // Auto-load weather when opened
-    if (id === 'miniWeather') loadWeather();
+    // Auto-load weather when opened — and speak the result
+    if (id === 'miniWeather') loadWeather(true);
   }
 
   function closeMiniApp(id) {
@@ -1939,7 +1939,10 @@ User location: Sydney, Australia`;
     return WMO_CODES[code] || ['🌡️', 'Unknown'];
   }
 
-  async function loadWeather() {
+  let _weatherSpeak = false;
+
+  async function loadWeather(speak_on_load = false) {
+    if (speak_on_load) _weatherSpeak = true;
     const loading = document.getElementById('weatherLoading');
     const content = document.getElementById('weatherContent');
     if (loading) loading.style.display = 'flex';
@@ -1986,8 +1989,18 @@ User location: Sydney, Australia`;
       if (content) content.style.display = '';
       log(`Weather loaded — ${Math.round(cur.temperature_2m)}°C ${desc}`, 'success');
 
+      const summary = `${desc}, ${Math.round(cur.temperature_2m)}°C (feels ${Math.round(cur.apparent_temperature)}°C), humidity ${cur.relative_humidity_2m}%, wind ${Math.round(cur.wind_speed_10m)} km/h`;
+
+      // Speak weather if this was triggered by opening the mini-app
+      if (_weatherSpeak && state.apiKey) {
+        const spokenSummary = `It's currently ${Math.round(cur.temperature_2m)} degrees in Sydney. ${desc}. Feels like ${Math.round(cur.apparent_temperature)} degrees, with ${cur.relative_humidity_2m} percent humidity and winds at ${Math.round(cur.wind_speed_10m)} kilometres per hour.`;
+        appendMessage('charlotte', spokenSummary);
+        speak(spokenSummary);
+        _weatherSpeak = false;
+      }
+
       // Return summary for Charlotte
-      return `${desc}, ${Math.round(cur.temperature_2m)}°C (feels ${Math.round(cur.apparent_temperature)}°C), humidity ${cur.relative_humidity_2m}%, wind ${Math.round(cur.wind_speed_10m)} km/h`;
+      return summary;
     } catch (err) {
       if (loading) loading.textContent = '⚠ Could not load weather';
       log(`Weather error: ${err.message}`, 'error');
@@ -2076,63 +2089,71 @@ User location: Sydney, Australia`;
 
   const musicState = {
     window: null,
+    loaded: false,
   };
 
   function musicOpenYT() {
-    musicState.window = window.open('https://music.youtube.com', '_blank', 'noopener');
-    document.getElementById('musicStatus').textContent = 'YT Music opened in new tab';
-    miniToast('YouTube Music opened in new tab');
-    log('YT Music opened', 'info');
+    // Load YT Music into the iframe inside the mini-app
+    const frame = document.getElementById('musicFrame');
+    if (frame) {
+      frame.src = 'https://music.youtube.com';
+      musicState.loaded = true;
+      document.getElementById('musicStatus').textContent = 'Loading YT Music...';
+      frame.onload = () => {
+        document.getElementById('musicStatus').textContent = 'YT Music ready — use controls below';
+      };
+    }
+    log('YT Music loaded in mini-app', 'info');
+  }
+
+  function musicFocusAndKey(keyCode, shiftKey) {
+    // Focus the iframe then dispatch the key into it
+    const frame = document.getElementById('musicFrame');
+    if (!frame || !musicState.loaded) {
+      miniToast('Load YT Music first — click the Load button');
+      return false;
+    }
+    frame.focus();
+    try {
+      // Dispatch to iframe contentWindow — may be blocked cross-origin
+      const opts = { key: String.fromCharCode(keyCode), keyCode, which: keyCode, bubbles: true, shiftKey: !!shiftKey };
+      frame.contentWindow.document.body.dispatchEvent(new KeyboardEvent('keydown', opts));
+      frame.contentWindow.document.body.dispatchEvent(new KeyboardEvent('keyup', opts));
+      return true;
+    } catch(e) {
+      // Cross-origin restriction — guide user
+      miniToast('Click inside the YT Music frame first, then use keyboard shortcuts');
+      return false;
+    }
   }
 
   function musicCmd(cmd) {
-    if (!musicState.window || musicState.window.closed) {
-      miniToast('Open YT Music first');
-      openMiniApp('miniMusic');
-      return;
-    }
-    // Keyboard shortcut injection
-    const keyMap = {
-      play:  { key: 'k', code: 'KeyK' },
-      pause: { key: 'k', code: 'KeyK' },
-      next:  { key: 'l', code: 'ArrowRight', shiftKey: true },  // YT Music: shift+N
-      prev:  { key: 'j', code: 'ArrowLeft',  shiftKey: true },
+    openMiniApp('miniMusic');
+    if (!musicState.loaded) { musicOpenYT(); return; }
+
+    // YT Music keyboard shortcuts: k = play/pause, Shift+N = next, Shift+P = prev
+    const cmds = {
+      play:  () => musicFocusAndKey(75, false),   // k
+      pause: () => musicFocusAndKey(75, false),   // k
+      next:  () => musicFocusAndKey(78, true),    // Shift+N
+      prev:  () => musicFocusAndKey(80, true),    // Shift+P
     };
-    // YT Music shortcuts: k=play/pause, shift+N=next, shift+P=prev
-    const shortcuts = {
-      play:  [{ key: 'k', keyCode: 75 }],
-      pause: [{ key: 'k', keyCode: 75 }],
-      next:  [{ key: 'N', keyCode: 78, shiftKey: true }],
-      prev:  [{ key: 'P', keyCode: 80, shiftKey: true }],
-    };
-    try {
-      const actions = shortcuts[cmd];
-      if (actions) {
-        actions.forEach(opts => {
-          musicState.window.document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, ...opts }));
-        });
-      }
-    } catch(e) {
-      // Cross-origin — can't inject, instruct user
-      miniToast(`Use keyboard in YT Music tab: ${cmd === 'play' || cmd === 'pause' ? 'K' : cmd === 'next' ? 'Shift+N' : 'Shift+P'}`);
-    }
-    document.getElementById('musicStatus').textContent = `Command sent: ${cmd}`;
+    if (cmds[cmd]) cmds[cmd]();
+    document.getElementById('musicStatus').textContent = `${cmd} — click inside the music frame if nothing happened`;
     log(`Music: ${cmd}`, 'info');
   }
 
   function musicSearch(queryOverride) {
     const query = queryOverride || document.getElementById('musicSearchInput').value.trim();
     if (!query) return;
-
-    // Open YT Music with search pre-filled
-    const url = `https://music.youtube.com/search?q=${encodeURIComponent(query)}`;
-    if (musicState.window && !musicState.window.closed) {
-      musicState.window.location.href = url;
-    } else {
-      musicState.window = window.open(url, '_blank', 'noopener');
+    openMiniApp('miniMusic');
+    const frame = document.getElementById('musicFrame');
+    if (frame) {
+      frame.src = `https://music.youtube.com/search?q=${encodeURIComponent(query)}`;
+      musicState.loaded = true;
+      document.getElementById('musicStatus').textContent = `Searching: "${query}"`;
     }
-    document.getElementById('musicStatus').textContent = `Searching: "${query}"`;
-    miniToast(`Opening YT Music search: ${query}`);
+    miniToast(`Searching YT Music: ${query}`);
     log(`Music search: ${query}`, 'info');
   }
 
@@ -2211,7 +2232,8 @@ User location: Sydney, Australia`;
 
   async function handleGetWeather(args) {
     openMiniApp('miniWeather');
-    const summary = await loadWeather();
+    // loadWeather will speak automatically since openMiniApp already passes speak=true
+    const summary = await loadWeather(false);
     return `Current weather in Sydney: ${summary}`;
   }
 

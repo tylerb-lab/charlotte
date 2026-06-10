@@ -1168,7 +1168,7 @@ body::after {
   position: fixed;
   z-index: 900;
   min-width: 320px;
-  max-width: 420px;
+  max-width: min(var(--app-max-w, 420px), 96vw);
   background: var(--color-bg-panel);
   border: 1px solid var(--color-border-bright);
   border-radius: var(--radius-lg);
