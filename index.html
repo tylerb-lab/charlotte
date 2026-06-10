@@ -564,64 +564,72 @@
   </div>
 
   <!-- MUSIC Mini-App -->
-  <div class="mini-app" id="miniMusic" style="top:120px;left:calc(50% - 220px);width:440px;max-width:96vw">
+  <div class="mini-app" id="miniMusic" style="top:100px;left:calc(50% - 200px);width:400px;max-width:96vw">
     <div class="mini-app-bar" id="miniMusicBar">
       <span class="mini-app-icon">&#x1F3B5;</span>
-      <span class="mini-app-title">YT Music</span>
+      <span class="mini-app-title">Music</span>
       <div class="mini-app-controls">
         <button class="mini-app-btn minimize" onclick="Charlotte.minimizeMiniApp('miniMusic')" title="Minimize">&mdash;</button>
         <button class="mini-app-btn close" onclick="Charlotte.closeMiniApp('miniMusic')" title="Close">&times;</button>
       </div>
     </div>
-    <div class="mini-app-body">
-      <div class="music-mini">
+    <div class="mini-app-body" style="padding:0">
 
-        <!-- Status / Now playing area -->
-        <div id="musicNowPlaying" style="background:var(--color-surface-2);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-3);text-align:center;margin-bottom:var(--space-3)">
-          <div style="font-size:1.8rem;margin-bottom:4px">&#x1F3B5;</div>
-          <div id="musicStatus" style="font-size:var(--text-xs);color:var(--color-text-faint);line-height:1.5">YT Music not open yet.<br/>Click Launch to open it in a controlled window.</div>
+      <!-- YouTube iframe embed target -->
+      <div id="ytPlayerWrap" style="background:#000;position:relative;width:100%;height:0;padding-bottom:56.25%">
+        <div id="ytPlayer" style="position:absolute;inset:0;width:100%;height:100%"></div>
+        <!-- Splash shown before first load -->
+        <div id="ytSplash" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:var(--color-surface-2)">
+          <div style="font-size:2.2rem">&#x1F3B5;</div>
+          <div style="font-family:var(--font-display);font-size:var(--text-sm);color:var(--color-primary);letter-spacing:.1em">MUSIC PLAYER</div>
+          <div style="font-size:var(--text-xs);color:var(--color-text-faint);text-align:center;padding:0 20px;line-height:1.5">Search a song below or ask Charlotte to play something</div>
         </div>
+      </div>
 
-        <!-- Launch button -->
-        <button class="music-open-btn" id="musicLaunchBtn" onclick="Charlotte.musicOpenYT()" style="margin-bottom:var(--space-3)">
-          &#x25B6; Launch YT Music Window
-        </button>
+      <!-- Now Playing bar -->
+      <div style="padding:10px 14px;background:var(--color-surface-2);border-top:1px solid var(--color-border);border-bottom:1px solid var(--color-border)">
+        <div id="ytNowPlaying" style="font-family:var(--font-display);font-size:var(--text-sm);color:var(--color-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600">Ready</div>
+        <div id="ytNowChannel" style="font-size:var(--text-xs);color:var(--color-text-faint);margin-top:2px">Search a song or ask Charlotte to play something</div>
+      </div>
 
-        <!-- Playback controls -->
-        <div style="display:flex;align-items:center;justify-content:center;gap:var(--space-3);margin-bottom:var(--space-3)">
+      <!-- Controls -->
+      <div style="padding:10px 14px;background:var(--color-bg-panel)">
+        <!-- Transport -->
+        <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:10px">
           <button class="music-ctrl-btn" onclick="Charlotte.musicCmd('prev')" title="Previous">&#x23EE;</button>
-          <button class="music-ctrl-btn play-pause" onclick="Charlotte.musicCmd('pause')" title="Pause">&#x23F8;</button>
-          <button class="music-ctrl-btn play-pause" onclick="Charlotte.musicCmd('play')" title="Play">&#x25B6;</button>
+          <button class="music-ctrl-btn play-pause" id="ytPlayPauseBtn" onclick="Charlotte.musicCmd('toggle')" title="Play/Pause">&#x25B6;</button>
           <button class="music-ctrl-btn" onclick="Charlotte.musicCmd('next')" title="Next">&#x23ED;</button>
+          <button class="music-ctrl-btn" onclick="Charlotte.musicCmd('mute')" title="Mute" id="ytMuteBtn">&#x1F50A;</button>
+          <input type="range" id="ytVolSlider" min="0" max="100" value="80" oninput="Charlotte.musicSetVol(this.value)"
+            style="width:70px;accent-color:var(--color-primary);vertical-align:middle" />
         </div>
 
-        <!-- Search & play -->
-        <div class="mini-section-label">Search &amp; Play</div>
-        <div class="search-bar">
-          <input type="text" id="musicSearchInput" placeholder="Song, artist, playlist..."
+        <!-- Progress bar -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span id="ytCurrentTime" style="font-size:var(--text-xs);color:var(--color-text-faint);min-width:32px">0:00</span>
+          <div style="flex:1;height:4px;background:var(--color-surface-3);border-radius:2px;cursor:pointer;position:relative" onclick="Charlotte.musicSeek(event,this)" id="ytProgressBar">
+            <div id="ytProgressFill" style="height:100%;width:0%;background:var(--color-primary);border-radius:2px;transition:width .5s linear;pointer-events:none"></div>
+          </div>
+          <span id="ytDuration" style="font-size:var(--text-xs);color:var(--color-text-faint);min-width:32px">0:00</span>
+        </div>
+
+        <!-- Search -->
+        <div style="display:flex;gap:6px">
+          <input type="text" id="musicSearchInput" placeholder="Search song, artist..."
             onkeydown="if(event.key==='Enter')Charlotte.musicSearch()"
-            style="background:var(--color-surface);border:1px solid var(--color-border-bright);border-radius:var(--radius-sm);color:var(--color-text);font-family:var(--font-body);font-size:var(--text-xs);padding:6px 10px;outline:none;flex:1" />
+            style="flex:1;background:var(--color-surface);border:1px solid var(--color-border-bright);border-radius:var(--radius-sm);color:var(--color-text);font-family:var(--font-body);font-size:var(--text-xs);padding:6px 10px;outline:none" />
           <button class="hud-btn primary" onclick="Charlotte.musicSearch()">Play</button>
         </div>
-
-        <!-- Bookmarklet helper instruction -->
-        <div id="musicBookmarkletSection" style="margin-top:var(--space-3);display:none">
-          <div class="mini-section-label">One-time setup for full control</div>
-          <div style="font-size:var(--text-xs);color:var(--color-text-faint);line-height:1.6;margin-bottom:var(--space-2)">
-            Drag this button to your bookmarks bar. Then click it once while YT Music is open to enable Charlotte's play/pause/skip controls:
-          </div>
-          <a id="musicBookmarklet" href="" class="hud-btn primary" style="display:inline-block;text-decoration:none;cursor:grab">
-            &#x1F3B5; Charlotte Music Bridge
-          </a>
-        </div>
-
       </div>
+
     </div>
   </div>
 
   <!-- Toast notification -->
   <div class="miniapp-toast" id="miniappToast"></div>
 
+  <!-- YouTube IFrame API — loaded async, calls window.onYouTubeIframeAPIReady when ready -->
+  <script src="https://www.youtube.com/iframe_api"></script>
   <script src="./app.js"></script>
 <script data-pplx-inline-edit>
 (function () {
