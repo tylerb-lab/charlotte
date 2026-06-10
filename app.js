@@ -2088,71 +2088,151 @@ User location: Sydney, Australia`;
   /* ─────────────────── MUSIC ─────────────────── */
 
   const musicState = {
-    window: null,
+    popup: null,
     loaded: false,
+    pollTimer: null,
   };
 
-  function musicOpenYT() {
-    // Load YT Music into the iframe inside the mini-app
-    const frame = document.getElementById('musicFrame');
-    if (frame) {
-      frame.src = 'https://music.youtube.com';
-      musicState.loaded = true;
-      document.getElementById('musicStatus').textContent = 'Loading YT Music...';
-      frame.onload = () => {
-        document.getElementById('musicStatus').textContent = 'YT Music ready — use controls below';
-      };
-    }
-    log('YT Music loaded in mini-app', 'info');
+  /* ── MUSIC — Popup window approach ──
+     YT Music blocks iframes (X-Frame-Options: SAMEORIGIN).
+     Instead we open a controlled popup window Charlotte owns.
+     For play/pause/skip we use the YT Music MediaSession API
+     via a bookmarklet bridge that the user drags to their bar once.
+     Charlotte can also navigate the popup URL directly (search works perfectly).
+  */
+
+  function musicSetStatus(msg) {
+    const el = document.getElementById('musicStatus');
+    if (el) el.textContent = msg;
   }
 
-  function musicFocusAndKey(keyCode, shiftKey) {
-    // Focus the iframe then dispatch the key into it
-    const frame = document.getElementById('musicFrame');
-    if (!frame || !musicState.loaded) {
-      miniToast('Load YT Music first — click the Load button');
-      return false;
+  function musicOpenYT() {
+    openMiniApp('miniMusic');
+
+    // Open as a popup window Charlotte owns (not a background tab)
+    const w = 480, h = 640;
+    const left = Math.max(0, window.screen.width  - w - 40);
+    const top  = Math.max(0, (window.screen.height - h) / 2);
+    const features = `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`;
+
+    if (musicState.popup && !musicState.popup.closed) {
+      musicState.popup.focus();
+      musicSetStatus('YT Music window already open');
+      return;
     }
-    frame.focus();
-    try {
-      // Dispatch to iframe contentWindow — may be blocked cross-origin
-      const opts = { key: String.fromCharCode(keyCode), keyCode, which: keyCode, bubbles: true, shiftKey: !!shiftKey };
-      frame.contentWindow.document.body.dispatchEvent(new KeyboardEvent('keydown', opts));
-      frame.contentWindow.document.body.dispatchEvent(new KeyboardEvent('keyup', opts));
-      return true;
-    } catch(e) {
-      // Cross-origin restriction — guide user
-      miniToast('Click inside the YT Music frame first, then use keyboard shortcuts');
-      return false;
+
+    musicState.popup = window.open('https://music.youtube.com', 'charlotte_ytmusic', features);
+    musicState.loaded = true;
+
+    if (!musicState.popup) {
+      musicSetStatus('Popup blocked — allow popups for this site in your browser');
+      miniToast('Allow popups for Charlotte to control YT Music');
+      log('Music popup blocked by browser', 'warn');
+      return;
     }
+
+    musicSetStatus('YT Music opening... use controls below once loaded');
+    log('YT Music popup opened', 'success');
+
+    // Show bookmarklet section for advanced control
+    const bm = document.getElementById('musicBookmarkletSection');
+    if (bm) bm.style.display = '';
+
+    // Build and set bookmarklet href — this script listens for Charlotte's postMessages
+    // and maps them to YT Music keyboard shortcuts inside the popup
+    const bridgeScript = `(function(){
+      window.__charlotteBridge=true;
+      window.addEventListener('message',function(e){
+        if(!e.data||e.data.source!=='charlotte') return;
+        var cmd=e.data.cmd;
+        var map={play:'k',pause:'k',next:'N',prev:'P'};
+        var key=map[cmd];
+        if(!key) return;
+        var shift=(cmd==='next'||cmd==='prev');
+        ['keydown','keyup'].forEach(function(t){
+          document.dispatchEvent(new KeyboardEvent(t,{key:key,keyCode:key.charCodeAt(0),which:key.charCodeAt(0),shiftKey:shift,bubbles:true}));
+        });
+      });
+      console.log('Charlotte Music Bridge active');
+      alert('Charlotte Music Bridge installed! Play/Pause/Skip controls now work.');
+    })();`;
+
+    const bmEl = document.getElementById('musicBookmarklet');
+    if (bmEl) {
+      bmEl.href = 'javascript:' + encodeURIComponent(bridgeScript).replace(/%20/g,'+');
+    }
+
+    // Poll to detect popup close
+    clearInterval(musicState.pollTimer);
+    musicState.pollTimer = setInterval(() => {
+      if (musicState.popup && musicState.popup.closed) {
+        musicState.loaded = false;
+        musicState.popup = null;
+        clearInterval(musicState.pollTimer);
+        musicSetStatus('YT Music window was closed. Click Launch to reopen.');
+        log('YT Music popup closed', 'info');
+      }
+    }, 2000);
   }
 
   function musicCmd(cmd) {
     openMiniApp('miniMusic');
-    if (!musicState.loaded) { musicOpenYT(); return; }
 
-    // YT Music keyboard shortcuts: k = play/pause, Shift+N = next, Shift+P = prev
-    const cmds = {
-      play:  () => musicFocusAndKey(75, false),   // k
-      pause: () => musicFocusAndKey(75, false),   // k
-      next:  () => musicFocusAndKey(78, true),    // Shift+N
-      prev:  () => musicFocusAndKey(80, true),    // Shift+P
-    };
-    if (cmds[cmd]) cmds[cmd]();
-    document.getElementById('musicStatus').textContent = `${cmd} — click inside the music frame if nothing happened`;
+    if (!musicState.popup || musicState.popup.closed) {
+      musicOpenYT();
+      musicSetStatus('Opening YT Music... try again in a moment');
+      return;
+    }
+
+    // Bring popup to front
+    musicState.popup.focus();
+
+    // Try postMessage — works if bookmarklet bridge is installed
+    try {
+      musicState.popup.postMessage({ source: 'charlotte', cmd }, 'https://music.youtube.com');
+      musicSetStatus(`Sent: ${cmd} — if nothing happened, install the Music Bridge bookmarklet`);
+    } catch(e) {
+      musicSetStatus(`Command sent to YT Music window`);
+    }
+
+    // Also try direct keyboard injection (works if same-origin or bridge is active)
+    try {
+      const keyMap = { play: 'k', pause: 'k', next: 'N', prev: 'P' };
+      const key = keyMap[cmd];
+      if (key) {
+        const shift = cmd === 'next' || cmd === 'prev';
+        const opts = { key, keyCode: key.charCodeAt(0), which: key.charCodeAt(0), shiftKey: shift, bubbles: true };
+        musicState.popup.document.dispatchEvent(new KeyboardEvent('keydown', opts));
+        musicState.popup.document.dispatchEvent(new KeyboardEvent('keyup',  opts));
+      }
+    } catch(e) { /* cross-origin — postMessage is the fallback */ }
+
     log(`Music: ${cmd}`, 'info');
   }
 
   function musicSearch(queryOverride) {
     const query = queryOverride || document.getElementById('musicSearchInput').value.trim();
     if (!query) return;
+
     openMiniApp('miniMusic');
-    const frame = document.getElementById('musicFrame');
-    if (frame) {
-      frame.src = `https://music.youtube.com/search?q=${encodeURIComponent(query)}`;
+
+    const url = `https://music.youtube.com/search?q=${encodeURIComponent(query)}`;
+
+    if (musicState.popup && !musicState.popup.closed) {
+      // Navigate existing popup — this works cross-origin!
+      musicState.popup.location.href = url;
+      musicState.popup.focus();
+      musicSetStatus(`Searching: "${query}"`);
+    } else {
+      // Open new popup navigated directly to search
+      const w = 480, h = 640;
+      const left = Math.max(0, window.screen.width - w - 40);
+      const top  = Math.max(0, (window.screen.height - h) / 2);
+      musicState.popup = window.open(url, 'charlotte_ytmusic', `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`);
       musicState.loaded = true;
-      document.getElementById('musicStatus').textContent = `Searching: "${query}"`;
+      musicSetStatus(`Searching: "${query}"`);
     }
+
     miniToast(`Searching YT Music: ${query}`);
     log(`Music search: ${query}`, 'info');
   }
@@ -2249,14 +2329,18 @@ User location: Sydney, Australia`;
     openMiniApp('miniMusic');
     if (args.action === 'search' && args.query) {
       musicSearch(args.query);
-      return `Opening YT Music and searching for "${args.query}".`;
+      return `Searching YT Music for "${args.query}".`;
     }
     if (args.action === 'open') {
       musicOpenYT();
-      return 'Opening YouTube Music.';
+      return 'Opening YouTube Music in a popup window.';
+    }
+    if (!musicState.popup || musicState.popup.closed) {
+      musicOpenYT();
+      return 'Opening YouTube Music first. Try the command again in a moment.';
     }
     musicCmd(args.action);
-    return `Music: ${args.action} command sent.`;
+    return `Music: ${args.action} command sent to YT Music window.`;
   }
 
 
