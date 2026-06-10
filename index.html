@@ -15,29 +15,43 @@
 </head>
 <body class="hud-boot">
 
-  <!-- API Key Overlay -->
+  <!-- Auth Overlay -->
   <div class="api-overlay" id="apiOverlay">
-    <div class="api-card">
+
+    <!-- MODE A: First-time setup (no stored key yet) -->
+    <div class="api-card" id="setupCard">
       <div class="api-card-icon">⚡</div>
-      <div class="api-card-title">CHARLOTTE INITIALISING</div>
+      <div class="api-card-title">FIRST TIME SETUP</div>
       <div class="api-card-desc">
-        Enter your OpenAI API key to bring Charlotte online.<br/>
-        Your key is stored in memory only and never sent anywhere except OpenAI.
+        Enter your OpenAI API key and set a password.<br/>
+        Your key will be encrypted and stored locally — you'll only need your password from now on.
       </div>
+      <div class="modal-field" style="text-align:left;width:100%">
+        <label class="modal-label" style="display:block;margin-bottom:6px">OpenAI API Key</label>
+        <input class="api-input" id="setupApiKey" type="password" placeholder="sk-..." autocomplete="off" style="width:100%" />
+      </div>
+      <div class="modal-field" style="text-align:left;width:100%">
+        <label class="modal-label" style="display:block;margin-bottom:6px">Set Password</label>
+        <input class="api-input" id="setupPassword" type="password" placeholder="Choose a password" autocomplete="new-password" style="width:100%" />
+      </div>
+      <button class="api-btn" id="setupSubmit" style="width:100%">ENCRYPT &amp; ACTIVATE</button>
+      <div class="api-note">Your key is encrypted with AES-256 before being stored. It never leaves your device.</div>
+    </div>
+
+    <!-- MODE B: Returning user — password only -->
+    <div class="api-card" id="loginCard" style="display:none">
+      <div class="api-card-icon">🔐</div>
+      <div class="api-card-title">CHARLOTTE</div>
+      <div class="api-card-desc">Enter your password to bring Charlotte online.</div>
       <div class="api-input-row">
-        <input
-          class="api-input"
-          id="apiKeyInput"
-          type="password"
-          placeholder="sk-..."
-          autocomplete="off"
-        />
-        <button class="api-btn" id="apiKeySubmit">ACTIVATE</button>
+        <input class="api-input" id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" />
+        <button class="api-btn" id="loginSubmit">UNLOCK</button>
       </div>
-      <div class="api-note">
-        Need a key? Visit <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" style="color:var(--color-primary)">platform.openai.com</a>
+      <div class="api-note" style="margin-top:4px">
+        <button onclick="Charlotte.resetAuth()" style="background:none;border:none;color:var(--color-text-faint);font-size:var(--text-xs);cursor:pointer;text-decoration:underline">Reset &amp; enter new API key</button>
       </div>
     </div>
+
   </div>
 
   <!-- Header -->
